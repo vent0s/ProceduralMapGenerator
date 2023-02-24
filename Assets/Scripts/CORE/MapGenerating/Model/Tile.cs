@@ -82,13 +82,26 @@ namespace septim.core.map
             }
             if(attachedObj_terrain != null)
             {
-                GameObject.Destroy(attachedObj_terrain);
+                GameManager.instance.DestroyObject(attachedObj_terrain);
+                attachedObj_terrain = null;
             }
         }
 
         #endregion
 
         #region data query and modificatoin
+
+        public void TileInit()
+        {
+            lock (lockObject)
+            {
+                this.type = null;
+                this.continentGroup = null;
+                this.isSeed = null;
+                this.movability = null;
+                this.expansionRate = null;
+            }
+        }
 
         public void SetType(E_TerrainType input)
         {
@@ -188,23 +201,55 @@ namespace septim.core.map
 
         private void OnQueryTiles(Tile input)
         {
-            if(
-                (input.type != null && this.type[0] != input.type[0]) || 
-                (input.continentGroup != null && this.continentGroup[0] != input.continentGroup[0]) ||
-                (input.isSeed != null && this.isSeed[0] != input.isSeed[0]) ||
-                (input.movability != null && this.movability[0] != input.movability[0]) ||
-                (input.expansionRate != null && (input.expansionRate[0] != 0 && this.expansionRate[0] != 0))
-                )
+            lock (lockObject)
             {
-                return;
-            }
-            else
-            {
-                DataHandler.GetInstance().tilesQueried.Add(this);
+                if (!TileCheck(input,this))
+                {
+                    return;
+                }
+                else
+                {
+                    DataHandler.GetInstance().tilesQueried.Add(this);
+                }
             }
         }
 
+        public Tile OnQueryByNeighbor_GetAnyExist(Tile input)
+        {
+            lock (lockObject)
+            {
+                foreach(int var in connections)
+                {
+                    if (TileCheck(input, DataHandler.GetInstance().tileByIndex[var]))
+                    {
+                        return this;
+                    }
+                }
+                return null;
+            }
+        }
 
+        //TODO :
+        //OnQueryByNeighbor_GetAnyNotExist
+        //OnQueryByNeighbor_GetExistByNumber
+        //OnQueryByNeighbor_GetAllExist
+        //OnQueryByNeighbor_GetAllNotExist
+        //OnQueryByNeighbor_GetExistBySide(Experimental)
+
+        private bool TileCheck(Tile input, Tile query)
+        {
+            if (
+                (input.type != null && query.type[0] != input.type[0]) ||
+                (input.continentGroup != null && query.continentGroup[0] != input.continentGroup[0]) ||
+                (input.isSeed != null && query.isSeed[0] != input.isSeed[0]) ||
+                (input.movability != null && query.movability[0] != input.movability[0]) ||
+                (input.expansionRate != null && (input.expansionRate[0] != 0 && query.expansionRate[0] != 0))
+                )
+            {
+                return false;
+            }
+            return true;
+        }
 
         #endregion
 

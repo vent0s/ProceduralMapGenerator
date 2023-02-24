@@ -65,7 +65,7 @@ namespace septim.core
         {
             //invoke hexamap generating
             OnStartingGame();
-            mapGenerator.WorldGenerator();
+            StartCoroutine(mapGenerator.WorldGenerator());
         }
 
         //we need an overwrite method to load saving data, the data should pass in as an class object
@@ -82,6 +82,7 @@ namespace septim.core
         #endregion
 
         #region utilities
+        public int coroutineCount = 0;
 
         public GameObject SpawnPrefab(GameObject spawnPrefab, int tileIndex, float adjustScale, bool isUi)
         {
@@ -114,6 +115,15 @@ namespace septim.core
             return obj;
         }
 
+        public void StartCoroutines(List<IEnumerator> coroutines)
+        {
+            coroutineCount = coroutines.Count;
+            foreach(IEnumerator var in coroutines)
+            {
+                StartCoroutine(var);
+            }
+        }
+
         public void DestroyObject(GameObject input)
         {
             Destroy(input);
@@ -129,6 +139,7 @@ namespace septim.core
         public int ExpanMaxRootCells;
         public int ExpanDeviationRate;
         public int minProvinceRange;
+        public float spawningSpeed = 0.2f;
 
         [Space]
         [Header("Parent Transforms")]

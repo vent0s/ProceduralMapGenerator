@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System;
 using UnityEngine;
 using septim.core.map;
+using septim.core.threading;
 using HexasphereGrid;
 using Tile = septim.core.map.Tile;
 
@@ -16,6 +17,7 @@ namespace septim.core
         #region Singleton
         private static DataHandler instance;
         public DelegateBody delegateBody;
+        public Dictionary<CoroutineBody, IEnumerator> coroutines;
         private GameManager gameManager;
 
         public static DataHandler GetInstance()
@@ -104,7 +106,7 @@ namespace septim.core
             }
             Tile curTile = new Tile(index, 0, -1, false, 4);
             curTile.DelegateAttach();
-
+            curTile.SetConnections(hexa.GetTileNeighbours(index));
             tileByIndex[index] = curTile;
             TileToSea(curTile);
         }
@@ -207,7 +209,7 @@ namespace septim.core
             }
 
             //spawn terrain
-            input.SetAttachedObj_Terrain(GameManager.instance.SpawnPrefab(GameManager.instance.prefabMountain, index, 1.4f, false));
+            input.SetAttachedObj_Terrain(GameManager.instance.SpawnPrefab(GameManager.instance.prefabMountain, index, 0.8f, false));
         }
         public void TileToMountain(int index)
         {
