@@ -1,6 +1,9 @@
+using System.Collections.Generic;
 using UnityEngine;
+using septim.core;
+using HexasphereGrid;
 
-namespace septim.core.map
+namespace septim.map
 {
     public class Tile : IDelegateLock
     {
@@ -9,7 +12,8 @@ namespace septim.core.map
          * 而Linq只需要O(N)就能完成对特定数值的查询
          * 所以我们需要研究一下Linq，并看看能不能用在这里
          */
-
+        DataHandler dataHandler;
+        Hexasphere hexa;
 
         public int cellIndex { get; private set; }
 
@@ -50,6 +54,8 @@ namespace septim.core.map
 
         public Tile(int cellIndex)
         {
+            dataHandler = DataHandler.GetInstance();
+            hexa = Hexasphere.GetInstance("Hexasphere");
             this.cellIndex = cellIndex;
             this.isDelegateAttached = false;
             this.connections = new int[6];
@@ -59,6 +65,8 @@ namespace septim.core.map
 
         public Tile(int cellIndex, E_TerrainType type, int landGroupIndex, bool isSeed, int movability)
         {
+            dataHandler = DataHandler.GetInstance();
+            hexa = Hexasphere.GetInstance("Hexasphere");
             this.cellIndex = cellIndex;
             this.type = new E_TerrainType[] { type };
 
@@ -72,6 +80,8 @@ namespace septim.core.map
 
             this.isDelegateAttached = false;
             this.connections = new int[6];
+
+
         }
 
         ~Tile()
@@ -229,12 +239,55 @@ namespace septim.core.map
             }
         }
 
+        public Tile OnQueryByNeighbor_GetAnyExist_MultipleInput(List<Tile> input)
+        {
+            lock (lockObject)
+            {
+                foreach (int var in connections)
+                {
+                    foreach(Tile inputTile in input)
+                    {
+                        if (TileCheck(inputTile, DataHandler.GetInstance().tileByIndex[var]))
+                        {
+                            return this;
+                        }
+                    }
+                }
+                return null;
+            }
+        }
+
+        public void OnConnectionChecking()
+        {
+            if(this.type[0] == E_TerrainType.road || this.type[0] == E_TerrainType.trench || this.type[0] == E_TerrainType.navyPath)
+            {
+                for(int i = 0; i < this.connections.Length; i++)
+                {
+                    if(dataHandler.tileByIndex[this.connections[i]].type[0] == this.type[0])
+                    {
+                        switch (this.type[0])
+                        {
+                            case E_TerrainType.road:
+                            case E_TerrainType.navyPath:
+                                this.attachedObj_terrain.transform.GetChild(0).GetChild(0).GetChild(i).gameObject.SetActive(true);
+                                break;
+
+                            case E_TerrainType.trench:
+                                this.attachedObj_terrain.transform.GetChild(0).GetChild(0).GetChild(i).gameObject.SetActive(false);
+                                break;
+                        }
+                    }
+                }
+            }
+        }
+
         //TODO :
         //OnQueryByNeighbor_GetAnyNotExist
         //OnQueryByNeighbor_GetExistByNumber
         //OnQueryByNeighbor_GetAllExist
         //OnQueryByNeighbor_GetAllNotExist
         //OnQueryByNeighbor_GetExistBySide(Experimental)
+
 
         private bool TileCheck(Tile input, Tile query)
         {

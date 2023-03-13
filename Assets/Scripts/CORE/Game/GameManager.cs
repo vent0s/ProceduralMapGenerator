@@ -3,18 +3,29 @@ using System.Collections.Generic;
 using UnityEngine;
 using HexasphereGrid;
 using septim.core.saveload;
-using septim.core.map;
+using septim.map;
 
 namespace septim.core
 {
     public class GameManager : MonoBehaviour
     {
+        #region test
+
+        public GameObject testingDot;
+        public int curTestingTile = -1;
+        public int curTestingLoopIndex = 0;
+
+        #endregion
+
         #region singleton
         public static GameManager instance;
 
         Hexasphere hexa;
+        Hexasphere factionHexa;
         DataHandler dataHandler;
         MapGenerator mapGenerator;
+
+        public DelegateBody delegateBody;
 
         private void Awake()
         {
@@ -30,36 +41,80 @@ namespace septim.core
 
         private void Start()
         {
+            delegateBody = new DelegateBody();
             hexa = Hexasphere.GetInstance("Hexasphere");
+            factionHexa = Hexasphere.GetInstance("FactionSphere");
             mapGenerator = MapGenerator.GetInstance();
             dataHandler = DataHandler.GetInstance();
 
-            //hexa.OnTileClick += TileClick;
+            factionHexa.OnTileClick += TileClick;
 
+            //mapGenerator.BaseTerrainGenerator();
             StartGame();
         }
+
+        public delegate void OnClickTile();
+        public OnClickTile onClickTile;
 
         //WE WILL ONLY CHANGE STATE IN GAME MANAGER,
         //FOR BEHAVIOR OF DIFFERENT STATE WHEN INTRACT WITH TILES, WE NEED TO WRITE SEPERATE CLASS TO DEFINE
         //AND WE WILL REGISTER AND DEREGISTER THEIR INTERACTION EVENT WITH HEXASPHERE HERE
         private void TileClick(int input)
         {
-            Debug.Log("On Clicked Tile: " + input);
-            int index = 0;
-            foreach(int var in hexa.GetTileNeighbours(input))
+            if(gameState == E_GameState.OnPlaying)
             {
-                Debug.Log("Tile neighbour: " + var + " in " + index++);
+                if (onClickTile != null)
+                {
+                    onClickTile();
+                }
+                
+
+                if (curTestingTile != input)
+                {
+                    curTestingTile = input;
+                    curTestingLoopIndex = 0;
+                }
+
+                if (curTestingLoopIndex >= hexa.tiles[input].vertices.Length)
+                {
+                    curTestingLoopIndex = 0;
+                }
+
+
+                //Debug.LogWarning("On Clicked Tile: " + input + " vertice: " + curTestingLoopIndex);
+                //testingDot.transform.localPosition = hexa.tiles[input].vertices[curTestingLoopIndex++];
+                //testingDot.transform.localPosition = hexa.tiles[input].neighbours[curTestingLoopIndex++].polygonCenter;
+                //testingDot.transform.position = hexa.GetTileCenter(dataHandler.tileByIndex[input].connections[curTestingLoopIndex++]);
+
+                //Vector2 latlont = hexa.GetTileLatLon(input);
+
+                /*
+                int index = 0;
+                foreach(int var in hexa.tiles[input].neighboursIndices)
+                {
+                    //Debug.Log("Tile neighbour: " + var + " in " + index++);
+                    Debug.Log("Tile neighbour: " + var + " in " + index++);
+                }
+                */
             }
+
         }
         #endregion
 
         #region game configurations
 
         public E_GameState gameState = E_GameState.OnMainMenu;
+        public E_GameInteractionState gameInteractionState = E_GameInteractionState.defaultInteraction;
 
+        
         #endregion
 
         #region game loading and starting
+
+        private void Booting()
+        {
+
+        }
 
         public void StartGame()
         {
@@ -76,7 +131,7 @@ namespace septim.core
 
         private void OnStartingGame()
         {
-            gameState = E_GameState.OnPlaying;
+            gameState = E_GameState.OnLoading;
         }
 
         #endregion
@@ -84,7 +139,7 @@ namespace septim.core
         #region utilities
         public int coroutineCount = 0;
 
-        public GameObject SpawnPrefab(GameObject spawnPrefab, int tileIndex, float adjustScale, bool isUi)
+        public GameObject SpawnPrefab(GameObject spawnPrefab, Transform parent, int tileIndex, float adjustScale, float adjustSubObjRotation)
         {
             // To apply a proper scale, get as a reference the length of a diagonal in tile 0 (note the "false" argument which specifies the position is in local coordinates)
             float size = Vector3.Distance(hexa.GetTileVertexPosition(0, 0, false), hexa.GetTileVertexPosition(0, 3, false));
@@ -99,18 +154,31 @@ namespace septim.core
             obj.transform.position = hexa.GetTileCenter(tileIndex);
 
             // Parent it to hexasphere, so it rotates along it
-            obj.transform.SetParent(hexa.transform);
+            obj.transform.SetParent(parent);
 
             // Align with surface
             obj.transform.LookAt(hexa.transform.position);
-            //we need to implement some overwrite for ui spec
-            if (!isUi)
-            {
-                obj.transform.Rotate(-90, 0, 0);
-            }
 
             // Set scale
             obj.transform.localScale = scale;
+            //To prevent Euler lock, I have to rotate Y axis before I rotate x axis
+            
+            obj.transform.Rotate(-90, 0, 0);
+            obj.transform.GetChild(0).Rotate(0, adjustSubObjRotation, 0);
+            return obj;
+        }
+
+        public GameObject SpawnConnectingPrefab(GameObject spawnPrefab, Transform parent, int tileIndex, float adjustScale)
+        {
+            GameObject obj = SpawnPrefab(spawnPrefab, parent, tileIndex, adjustScale, 0);
+
+            //Everything else if the same, except we need to synchronize nought direction with neighbour 0
+            obj.transform.GetChild(0).LookAt(hexa.GetTileCenter(dataHandler.tileByIndex[tileIndex].connections[0]));
+
+            Vector3 newRotation = obj.transform.GetChild(0).localEulerAngles;
+            newRotation.x = 0;
+            newRotation.z = 0;
+            obj.transform.GetChild(0).localEulerAngles = newRotation;
 
             return obj;
         }
@@ -131,7 +199,6 @@ namespace septim.core
 
         #endregion
 
-
         #region Map
 
         [Header("Map Generator")]
@@ -140,6 +207,8 @@ namespace septim.core
         public int ExpanDeviationRate;
         public int minProvinceRange;
         public float spawningSpeed = 0.2f;
+        [Range(0,1f)]
+        public float forestThreshold;
 
         [Space]
         [Header("Parent Transforms")]
@@ -147,20 +216,21 @@ namespace septim.core
         public Transform parentMountain;
         public Transform parentForest;
         public Transform parentSettlement;
+        public Transform parentRoad;
+        public Transform parentNavyPath;
 
         [Space]
         [Header("Tile Textures")]
         public Texture2D[] tileTextures;
         public Material[] tileMaterials;
-        /// <summary>
-        /// Use like this:
-        /// Texture2D t = (Texture2D)AssetDatabase.LoadAssetAtPath("Assets/Textures/texture.jpg", typeof(Texture2D));
-        /// so basic path is:"Assets/Plugins/Hex Medieval Fantasy Locations/Roads/hexRoad-"
-        /// it should be utilized with "000000" combination as it indicates connections between tiles,
-        /// and then append with "-", then "00" or "01" for variant, and ".png"
-        /// we should use "try" to see if we have 01 variant since some of connections don't have variant
-        /// </summary>
-        public const string pathTextureDir = "Assets/Plugins/Hex Medieval Fantasy Locations/Roads/hexRoad-";
+
+        [Space]
+        [Header("UI Object")]
+        public GameObject prefab_UiSelection;
+
+        [Space]
+        [Header("Pawn Prefab")]
+        public GameObject prefab_Pawn;
 
         [Space]
         [Header("Terrain Object Prefab")]
@@ -171,9 +241,25 @@ namespace septim.core
         [Header("Settlement Object Prefab")]
         public GameObject prefabCastle;
         public GameObject prefabVillage;
+        public GameObject prefabBridge;
+        public GameObject prefabPort;
+
+        [Space]
+        [Header("Connection Object prefab")]
+        public GameObject prefabRoad;
+        public GameObject prefabRoadPentagon;
+        public GameObject prefabNavyPath;
+        public GameObject prefabNavyPathPentagon;
+        public GameObject prefabTrench;
+        public GameObject prefabTrenchPentagon;
 
         #endregion
 
+        #region faction
+
+        public Color[] factionColor;
+
+        #endregion
 
     }
 }

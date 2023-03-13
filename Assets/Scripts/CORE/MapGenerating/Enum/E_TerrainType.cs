@@ -1,12 +1,17 @@
-namespace septim.core.map
+namespace septim.map
 {
     public enum E_TerrainType
     {
         sea,
         land,
         road,
+        bridge,
         forest,
-        mountain
+        mountain,
+        settlement,
+        port,
+        trench,
+        navyPath
     }
 }
 
